@@ -18,6 +18,7 @@ def _rag_badge(rag: str) -> str:
 
 
 def _mc_section(mc: dict) -> str:
+    """Single-model MC table (used as v1 / fallback when v2 is unavailable)."""
     if mc.get("p_on_time") is None:
         return f"> ⚠️ {mc.get('caveat', 'Monte Carlo unavailable.')}\n"
     return (
@@ -31,6 +32,77 @@ def _mc_section(mc: dict) -> str:
         f"(std: {mc.get('duration_ratio_std', 'N/A')}) |\n"
         f"| Sample tasks | {mc.get('n_ratio_samples', 0)} completed tasks |\n\n"
         f"> *{mc.get('caveat', '')}*\n"
+    )
+
+
+def _mc_comparison_section(mc_v1: dict, mc_v2: dict | None) -> str:
+    """Side-by-side model comparison when v2 is available."""
+    if mc_v2 is None or mc_v2.get("model") == "skipped_low_coverage":
+        # v2 not available — show v1 with reason
+        section = _mc_section(mc_v1)
+        if mc_v2:
+            section += f"\n> ⚠️ {mc_v2.get('caveat', '')}\n"
+        return section
+
+    # Both available — show comparison table
+    v1_p = f"{mc_v1['p_on_time']*100:.0f}%" if mc_v1.get('p_on_time') is not None else "N/A"
+    v2_p = f"{mc_v2['p_on_time']*100:.0f}%" if mc_v2.get('p_on_time') is not None else "N/A"
+    v1_med = mc_v1.get('median_finish_date', 'N/A')
+    v2_med = mc_v2.get('median_finish_date', 'N/A')
+    deadline = mc_v1.get('deadline', mc_v2.get('deadline', 'N/A'))
+
+    # Interpretation note
+    if mc_v1.get('p_on_time') is not None and mc_v2.get('p_on_time') is not None:
+        diff = mc_v2['p_on_time'] - mc_v1['p_on_time']
+        if abs(diff) < 0.03:
+            interp = "Models agree within 3 pp — dependency constraints add little schedule pressure beyond the throughput baseline."
+        elif diff < 0:
+            interp = (f"Dependency-aware model is {abs(diff)*100:.0f} pp lower than throughput baseline — "
+                      "predecessor constraints introduce sequencing delays not visible in raw completion rate.")
+        else:
+            interp = (f"Dependency-aware model is {diff*100:.0f} pp higher than throughput baseline — "
+                      "parallel predecessor paths absorb some schedule risk visible in throughput extrapolation.")
+    else:
+        interp = ""
+
+    return (
+        f"| Model | Basis | P(on-time) | Median Finish |\n"
+        f"|-------|-------|-----------|---------------|\n"
+        f"| Throughput (v1, baseline) | Completion rate × log-normal variance | **{v1_p}** | {v1_med} |\n"
+        f"| Dependency-aware DAG (v2) | Topological propagation through predecessor graph | **{v2_p}** | {v2_med} |\n\n"
+        f"**Deadline:** {deadline}\n\n"
+        + (f"> *{interp}*\n\n" if interp else "")
+        + f"> *v1 caveat: {mc_v1.get('caveat', '')}*\n\n"
+        + f"> *v2 caveat: {mc_v2.get('caveat', '')}*\n"
+    )
+
+
+def _cp_comparison_section(scores: dict, dag_info: dict | None) -> str:
+    """PM-flagged vs graph-computed critical path comparison."""
+    pm_total = scores.get("critical_path", {}).get("total", 0)
+    pm_red   = scores.get("critical_path", {}).get("by_rag", {}).get("Red", 0)
+
+    if dag_info is None or not dag_info.get("critical_path"):
+        return (
+            f"| Critical Path Tasks (PM-flagged) | {pm_total} |\n"
+            f"| Red on Critical Path | {pm_red} |\n"
+        )
+
+    graph_cp  = dag_info["critical_path"]
+    graph_n   = len(graph_cp)
+    cp_dur    = dag_info.get("critical_path_duration_days", 0)
+    diff      = graph_n - pm_total
+    diff_note = ""
+    if diff > 0:
+        diff_note = f" ({diff} tasks structurally critical but not PM-flagged)"
+    elif diff < 0:
+        diff_note = f" ({abs(diff)} tasks PM-flagged but not on longest graph path)"
+
+    return (
+        f"| Critical Path (PM-flagged) | {pm_total} tasks | {pm_red} Red |"
+        f" *(source: \"Critical ?\" column)*\n"
+        f"| Critical Path (graph-computed) | {graph_n} tasks | {cp_dur:.0f} planned days |"
+        f" *(longest path by duration through predecessor DAG)*{diff_note}\n"
     )
 
 
@@ -84,6 +156,8 @@ def write_report(
     project_name: str,
     scores: dict[str, Any],
     mc: dict[str, Any],
+    mc_v2: dict[str, Any] | None,
+    dag_info: dict[str, Any] | None,
     cluster: dict[str, Any],
     delta: dict[str, Any],
     shap_info: dict[str, Any],
@@ -111,7 +185,6 @@ def write_report(
     summary = scores.get("task_summary", {})
     by_status = summary.get("by_status", {})
     by_rag    = summary.get("by_rag", {})
-    crit      = scores.get("critical_path", {})
     dq        = scores.get("data_quality", {})
 
     # Determine whether LLM actually ran or fell back to rule-based
@@ -145,8 +218,8 @@ def write_report(
 | 🔴 Red Tasks | {by_rag.get('Red', 0)} |
 | 🟡 Yellow Tasks | {by_rag.get('Yellow', 0)} |
 | 🟢 Green Tasks | {by_rag.get('Green', 0)} |
-| Critical Path Tasks | {crit.get('total', 0)} |
-| Red on Critical Path | {crit.get('by_rag', {}).get('Red', 0)} |
+
+{_cp_comparison_section(scores, dag_info)}
 
 ---
 
@@ -166,7 +239,7 @@ def write_report(
 
 ## 🎲 Monte Carlo Deadline Forecast
 
-{_mc_section(mc)}
+{_mc_comparison_section(mc, mc_v2)}
 
 ---
 

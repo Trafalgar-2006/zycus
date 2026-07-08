@@ -42,6 +42,8 @@ AMBER_THRESHOLD = 0.55
 
 # ── Monte Carlo ─────────────────────────────────────────────────────────────
 MONTE_CARLO_SIMULATIONS = 10_000
+DAG_MIN_COVERAGE        = 0.50    # minimum predecessor coverage to run simulate_v2
+                                   # Outokumpu=28% → v1 only; UniSan=74% → v2 flagship
 
 # ── Clustering ──────────────────────────────────────────────────────────────
 N_CLUSTERS = 3   # for at-risk task clustering

@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
+import networkx as nx
 import numpy as np
 import pandas as pd
 
@@ -219,3 +220,157 @@ def simulate(
         ),
     }
 
+
+def simulate_v2(
+    df: pd.DataFrame,
+    dag_info: dict,
+    n_simulations: int = config.MONTE_CARLO_SIMULATIONS,
+    today: datetime | None = None,
+) -> dict[str, Any]:
+    """
+    Dependency-aware Monte Carlo: propagate sampled task durations through the DAG.
+
+    Algorithm
+    ---------
+    For each simulation:
+      1. Sample each task's duration: planned_days × lognormal(ratio_mean, ratio_std)
+      2. Topological traversal: task_start = max(pred_finish + lag) for all predecessors
+      3. project_finish = max(task_finish) across all leaf nodes
+
+    Completed tasks get duration = 0 (already done).
+    Tasks missing planned_days fall back to dataset mean (logged in n_fallback).
+    """
+    if today is None:
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    G       = dag_info.get("graph")
+    cov     = dag_info.get("coverage", {})
+    simplified_edges = dag_info.get("simplified_edges", [])
+
+    if G is None or G.number_of_nodes() == 0:
+        return {"p_on_time": None, "caveat": "DAG unavailable.", "model": "dependency_aware"}
+
+    # ── Duration distribution (same log-normal as v1) ──────────────────────
+    ratios = _duration_ratios(df)
+    if len(ratios) < 5:
+        return {
+            "p_on_time": None,
+            "caveat":    "Insufficient completed tasks for duration distribution.",
+            "model":     "dependency_aware",
+        }
+
+    ratio_mean = float(np.mean(ratios))
+    ratio_std  = float(np.std(ratios))
+    log_mean   = np.log(ratio_mean ** 2 / np.sqrt(ratio_std ** 2 + ratio_mean ** 2))
+    log_std    = np.sqrt(np.log(1 + (ratio_std / ratio_mean) ** 2))
+
+    # ── Base durations per node (remaining work) ───────────────────────────
+    df_r           = df.reset_index(drop=True)
+    mean_dur       = float(df_r["planned_days"].dropna().mean())
+    done_statuses  = {"Completed", "Not Applicable"}
+    task_base: dict[int, float] = {}
+    n_fallback = 0
+
+    for node in G.nodes():
+        idx = node - 1
+        if not (0 <= idx < len(df_r)):
+            task_base[node] = mean_dur
+            n_fallback += 1
+            continue
+        row = df_r.iloc[idx]
+        if row["Status"] in done_statuses:
+            task_base[node] = 0.0
+        else:
+            pdays = row.get("planned_days", None)
+            if pd.notna(pdays) and float(pdays) > 0:
+                pct = row.get("pct_complete", 0.0)
+                pct = float(pct) if pd.notna(pct) else 0.0
+                task_base[node] = float(pdays) * max(0.0, 1.0 - pct)
+            else:
+                task_base[node] = mean_dur
+                n_fallback += 1
+
+    # ── Topological order ──────────────────────────────────────────────────
+    try:
+        topo_order = list(nx.topological_sort(G))
+    except Exception:
+        return {"p_on_time": None, "caveat": "DAG has cycles.", "model": "dependency_aware"}
+
+    # ── Pre-sample ratios: (n_sims, n_nodes) ──────────────────────────────
+    rng          = np.random.default_rng(seed=42)
+    node_col     = {n: i for i, n in enumerate(topo_order)}
+    sampled_r    = rng.lognormal(log_mean, log_std, size=(n_simulations, len(topo_order)))
+
+    # Completed tasks: force ratio = 0 (zero remaining duration)
+    for node in topo_order:
+        if task_base.get(node, 1.0) == 0.0:
+            sampled_r[:, node_col[node]] = 0.0
+
+    # Build predecessor lookup once
+    pred_lookup: dict[int, list[tuple[int, float]]] = {
+        node: [(p, G.edges[p, node].get("lag", 0.0))
+               for p in G.predecessors(node)]
+        for node in topo_order
+    }
+
+    # ── Simulate ──────────────────────────────────────────────────────────
+    proj_finish = np.zeros(n_simulations)
+
+    for sim_i in range(n_simulations):
+        finish: dict[int, float] = {}
+        for node in topo_order:
+            dur   = task_base.get(node, mean_dur) * sampled_r[sim_i, node_col[node]]
+            preds = pred_lookup[node]
+            start = max((finish.get(p, 0.0) + lag for p, lag in preds), default=0.0)
+            finish[node] = start + dur
+        proj_finish[sim_i] = max(finish.values(), default=0.0)
+
+    # ── Summarise ─────────────────────────────────────────────────────────
+    summary  = df.attrs.get("summary", {})
+    deadline = summary.get("Project End Date")
+    if not isinstance(deadline, datetime):
+        deadline = None
+
+    median_finish = today + timedelta(days=float(np.median(proj_finish)))
+    n_edges       = G.number_of_edges()
+    n_simp        = len(simplified_edges)
+    simp_pct      = 100 * n_simp / max(n_edges, 1)
+
+    caveat = (
+        f"Graph covers {cov.get('n_with_preds', 0)}/{cov.get('n_tasks', 0)} tasks "
+        f"({cov.get('pct_coverage', 0):.0%} have predecessor data). "
+        f"Tasks without predecessors start immediately (treated as roots). "
+        + (f"{n_simp} non-FS edge(s) ({simp_pct:.0f}% of edges) simplified to FS+lag "
+           f"[types: {', '.join(set(e[2] for e in simplified_edges))}]. "
+           if n_simp > 0 else "")
+        + (f"{n_fallback} task(s) used dataset-mean duration (planned_days missing). "
+           if n_fallback > 0 else "")
+        + "No resource leveling applied."
+    )
+
+    if deadline is None:
+        return {
+            "deadline":             "Unknown",
+            "p_on_time":            None,
+            "median_finish_date":   str(median_finish.date()),
+            "model":                "dependency_aware",
+            "n_fallback_durations": n_fallback,
+            "caveat":               caveat,
+        }
+
+    days_to_dl = (deadline - today).days
+    p_on_time  = float((proj_finish <= days_to_dl).mean())
+    p_slip_1w  = float(((proj_finish > days_to_dl) & (proj_finish <= days_to_dl + 7)).mean())
+    p_slip_2w  = float((proj_finish > days_to_dl + 14).mean())
+
+    return {
+        "deadline":             str(deadline.date()),
+        "p_on_time":            p_on_time,
+        "p_slip_1w":            p_slip_1w,
+        "p_slip_2w_plus":       p_slip_2w,
+        "median_finish_date":   str(median_finish.date()),
+        "model":                "dependency_aware",
+        "n_fallback_durations": n_fallback,
+        "dag_n_edges":          n_edges,
+        "caveat":               caveat,
+    }

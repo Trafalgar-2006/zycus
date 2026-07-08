@@ -19,8 +19,10 @@
 | 🔴 Red Tasks | 60 |
 | 🟡 Yellow Tasks | 146 |
 | 🟢 Green Tasks | 121 |
-| Critical Path Tasks | 15 |
-| Red on Critical Path | 0 |
+
+| Critical Path (PM-flagged) | 15 tasks | 0 Red | *(source: "Critical ?" column)*
+| Critical Path (graph-computed) | 1 tasks | 262 planned days | *(longest path by duration through predecessor DAG)* (14 tasks PM-flagged but not on longest graph path)
+
 
 ---
 
@@ -76,6 +78,8 @@ Status held at **Amber** (score: 0.37 → 0.37, → stable).
 
 > *Based on single-snapshot data. Completion rate: 9.0 tasks/week from 261 completed tasks. Remaining: 219 active tasks. Duration ratio (log-normal) fitted from 113 tasks with parseable dates. No weekly history or dependency graph available — treat as directional. NOTE: completion rate nearly tripled in second half of project (x3.0 acceleration) — mean rate may overstate future pace if this was a catch-up sprint. P(on-time) may be optimistic.*
 
+> ⚠️ Dependency-aware simulation skipped: only 28% of tasks have Predecessor data (threshold: 50%). Running graph simulation on a 72%-missing edge set would likely understate risk for unconnected tasks. Throughput model (v1) used as sole forecast.
+
 
 ---
 
@@ -121,4 +125,4 @@ Status held at **Amber** (score: 0.37 → 0.37, → stable).
 
 ---
 
-*Report generated: 2026-07-08T14:59:47.527122 | Agent version: 1.0*
+*Report generated: 2026-07-08T15:25:07.712145 | Agent version: 1.0*

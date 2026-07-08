@@ -25,9 +25,10 @@ from pathlib import Path
 import config
 from agent.data_loader    import load_all_projects, load_project
 from agent.rag_scorer     import train_model, score_project, shap_summary
-from agent.monte_carlo    import simulate
+from agent.monte_carlo    import simulate, simulate_v2
 from agent.cluster_analyzer import analyze as cluster_analyze
 from agent.delta_store    import save_run, build_delta
+from agent.dag_builder    import build_dag
 from agent.reasoner       import generate_narrative
 from agent.verifier       import verify
 from agent.report_writer  import write_report
@@ -52,46 +53,81 @@ def run_project(
     shap_inf = shap_summary(model, df, importance=importance)
     print(f"        -> {scores['rag']} (score={scores['project_score']:.3f})")
 
-    # 2. Monte Carlo
-    print("  [2/7] Running Monte Carlo simulation...")
+    # 2. Monte Carlo v1 (throughput-based)
+    print("  [2/8] Running Monte Carlo v1 (throughput)...")
     mc = simulate(df, today=run_date)
     if mc.get("p_on_time") is not None:
         print(f"        -> P(on-time): {mc['p_on_time']*100:.0f}%  |  deadline: {mc['deadline']}")
     else:
         print(f"        -> {mc.get('caveat', 'skipped')}")
 
-    # 3. Cluster analysis
-    print("  [3/7] Clustering at-risk tasks...")
-    cluster = cluster_analyze(df)
-    print(f"        → {cluster['n_at_risk_active']} at-risk active tasks, {len(cluster['clusters'])} clusters")
+    # 2b. Build dependency DAG
+    print("  [3/8] Building dependency DAG...")
+    dag_info = build_dag(df)
+    cov      = dag_info["coverage"]
+    cp_graph = dag_info["critical_path"]
+    print(f"        -> {cov['n_with_preds']}/{cov['n_tasks']} tasks have predecessors "
+          f"({cov['pct_coverage']:.0%} coverage), "
+          f"{len(cp_graph)}-task graph-computed critical path")
 
-    # 4. Delta (save first, then compute delta vs previous)
-    print("  [4/7] Computing week-on-week delta...")
+    # 2c. Monte Carlo v2 (dependency-aware) — only if coverage is sufficient
+    mc_v2: dict | None = None
+    print("  [4/8] Monte Carlo v2 (dependency-aware)...")
+    if cov["pct_coverage"] >= config.DAG_MIN_COVERAGE:
+        mc_v2 = simulate_v2(df, dag_info, today=run_date)
+        if mc_v2.get("p_on_time") is not None:
+            print(f"        -> P(on-time): {mc_v2['p_on_time']*100:.0f}%  "
+                  f"(graph: {cov['n_with_preds']} edges, {mc_v2.get('n_fallback_durations', 0)} dur-fallbacks)")
+        else:
+            print(f"        -> {mc_v2.get('caveat', 'skipped')}")
+    else:
+        mc_v2 = {
+            "p_on_time": None,
+            "model":     "skipped_low_coverage",
+            "caveat":    (
+                f"Dependency-aware simulation skipped: only {cov['pct_coverage']:.0%} of tasks "
+                f"have Predecessor data (threshold: {config.DAG_MIN_COVERAGE:.0%}). "
+                "Running graph simulation on a 72%-missing edge set would likely understate risk "
+                "for unconnected tasks. Throughput model (v1) used as sole forecast."
+            ),
+        }
+        print(f"        -> Skipped (coverage {cov['pct_coverage']:.0%} < "
+              f"{config.DAG_MIN_COVERAGE:.0%} threshold) — v1 only")
+
+    # 5. Cluster analysis
+    print("  [5/8] Clustering at-risk tasks...")
+    cluster = cluster_analyze(df)
+    print(f"        -> {cluster['n_at_risk_active']} at-risk active tasks, {len(cluster['clusters'])} clusters")
+
+    # 6. Delta
+    print("  [6/8] Computing week-on-week delta...")
     save_run(name, scores, mc, cluster, run_date=run_date)
     delta = build_delta(name, scores)
     if delta.get("has_previous"):
-        print(f"        → {delta['change_sentence']}")
+        print(f"        -> {delta['change_sentence']}")
     else:
-        print(f"        → {delta.get('note', 'First run')}")
+        print(f"        -> {delta.get('note', 'First run')}")
 
-    # 5. Generate narrative
-    print(f"  [5/7] Generating narrative ({'LLM' if config.USE_LLM else 'rule-based'})...")
+    # 7. Generate narrative
+    print(f"  [7/8] Generating narrative ({'LLM' if config.USE_LLM else 'rule-based'})...")
     narrative = generate_narrative(name, scores, mc, cluster, delta, shap_inf)
 
-    # 6. Self-verify
-    print("  [6/7] Self-verifying narrative...")
+    # 8. Self-verify
+    print("  [8/8] Self-verifying narrative...")
     narrative, was_modified = verify(narrative, scores, mc)
     if was_modified:
-        print("        → ⚠️  Corrections applied by verifier")
+        print("        -> ⚠️  Corrections applied by verifier")
     else:
-        print("        → ✅ Verified clean")
+        print("        -> ✅ Verified clean")
 
-    # 7. Write report
-    print("  [7/7] Writing report...")
+    # Write report
+    print("  Writing report...")
     report_path = write_report(
         project_name=name,
         scores=scores,
         mc=mc,
+        mc_v2=mc_v2,
+        dag_info=dag_info,
         cluster=cluster,
         delta=delta,
         shap_info=shap_inf,
@@ -99,7 +135,7 @@ def run_project(
         verified=not was_modified,
         run_date=run_date,
     )
-    print(f"        → {report_path}")
+    print(f"        -> {report_path}")
 
     return report_path
 
