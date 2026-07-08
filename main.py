@@ -39,7 +39,6 @@ def run_project(
     df,
     model,
     importance: dict,
-    all_dfs: list,
     run_date: datetime,
 ) -> Path:
     """Run the full pipeline for a single project and return report path."""
@@ -48,7 +47,7 @@ def run_project(
     print(f"{'='*60}")
 
     # 1. Score
-    print("  [1/7] Scoring RAG...")
+    print("  [1/8] Scoring RAG...")
     scores   = score_project(df)
     shap_inf = shap_summary(model, df, importance=importance)
     print(f"        -> {scores['rag']} (score={scores['project_score']:.3f})")
@@ -87,8 +86,9 @@ def run_project(
             "caveat":    (
                 f"Dependency-aware simulation skipped: only {cov['pct_coverage']:.0%} of tasks "
                 f"have Predecessor data (threshold: {config.DAG_MIN_COVERAGE:.0%}). "
-                "Running graph simulation on a 72%-missing edge set would likely understate risk "
-                "for unconnected tasks. Throughput model (v1) used as sole forecast."
+                f"Running graph simulation on a {100 - cov['pct_coverage']*100:.0f}%-missing edge set "
+                "would likely understate risk for unconnected tasks. "
+                "Throughput model (v1) used as sole forecast."
             ),
         }
         print(f"        -> Skipped (coverage {cov['pct_coverage']:.0%} < "
@@ -165,7 +165,7 @@ def run_all(project_filter: str | None = None) -> list[Path]:
 
     reports = []
     for name, df in all_dfs_dict.items():
-        path = run_project(name, df, model, importance, all_dfs, run_date)
+        path = run_project(name, df, model, importance, run_date)
         reports.append(path)
 
     print(f"\nDone. {len(reports)} report(s) written.")
