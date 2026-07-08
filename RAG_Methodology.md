@@ -184,7 +184,7 @@ signals correlate with the PM's health judgments in this dataset.
 |--------|-------------|
 | Budget burn | Not present in the provided Excel files |
 | Stakeholder sentiment | Comment sheet has ~10 rows (S2P) and 0 rows (UniSan) — too sparse for reliable sentiment |
-| Predecessor chain analysis | Would require graph traversal; added complexity without proportional signal gain given available data |
+| Predecessor chain analysis | ~~Would require graph traversal~~ **Now implemented** — see DAG section below |
 
 ---
 
@@ -196,3 +196,31 @@ signals correlate with the PM's health judgments in this dataset.
 4. Duration column **magnitude** is also treated as unreliable for parent/summary rows — same PM-tool cascade mechanism. Empirically verified: 57% of parent-task Durations don't match sum or max of their children. Duration values are used for leaf-level tasks only, and all results depending on `planned_days` should be read as directional.
 5. Tasks with `Status = Not Applicable` are excluded from all scoring.
 6. The 30-day slip ceiling and 0.25/0.55 RAG thresholds are **tunable** in `config.py` and should be recalibrated as more project data becomes available.
+
+---
+
+## Dependency Graph & Monte Carlo v2 — Build Reasoning
+
+### Why we built a second model
+
+The throughput-based simulation (v1) produced a **5% P(on-time)** for UniSan and **78%** for Outokumpu *(as of 2026-07-08; numbers update each run as the project progresses)*. The UniSan number felt structurally pessimistic: the throughput model extrapolates a single team-wide completion rate forward, as if every remaining task must be done serially. Real projects don't work that way — workstreams run in parallel, and predecessor constraints tell you *which* tasks are actually blocking others.
+
+To test whether the model was being too conservative, we built the task dependency graph from the MS Project `Predecessors` column and implemented a discrete-event simulation that propagates finish times through the DAG topologically: a task can only start once all its predecessors have finished (plus any lag). This is qualitatively different from a throughput extrapolation — it respects the actual scheduling structure instead of assuming serial execution.
+
+### What changed and why
+
+For **UniSan** (74% predecessor coverage — 283 of 383 tasks have documented predecessors):
+- **v1: 5%** | **v2: 15%** — a 10 pp improvement *(as of 2026-07-08)*
+- The difference reflects real parallel structure in the schedule. When predecessor constraints are enforced, many tasks that the throughput model counts as a serial backlog turn out to run concurrently with each other. The project is still highly likely to slip (85% probability), but the *mechanism* is now grounded in the actual task graph rather than a flat completion-rate extrapolation.
+- The 50-task graph-computed critical path agrees exactly with the PM-flagged 50 critical-path tasks — which is a useful cross-validation: it means the PM was tracking the longest-duration chain, not just applying the flag arbitrarily.
+
+For **Outokumpu** (28% predecessor coverage — 139 of 493 tasks have documented predecessors):
+- **v2 not run.** With 72% of tasks having no predecessor data, a graph simulation would treat those tasks as unconstrained roots (starting immediately), almost certainly *understating* risk for the disconnected majority. Presenting a DAG result on a graph this sparse would look rigorous but would be misleading. The threshold of 50% was chosen as the minimum coverage required to trust the graph structure as representative; Outokumpu is well below it.
+- The PM-flagged critical path (15 tasks) is the authoritative signal here. The partial graph does identify a 1-task longest chain, but this is disclosed as a sparse-graph artifact, not a project-level finding.
+
+### Honest limitations
+
+- **No resource leveling:** The simulation assumes tasks can start as soon as their predecessors finish, regardless of whether the same person is assigned to multiple concurrent tasks. Real schedules are resource-constrained; this model is not.
+- **Non-FS relationships simplified:** 18 FF/SS edges (6% of UniSan's edges) were approximated as FS + lag. This is logged in the report caveat per task pair for full auditability.
+- **Duration fallbacks:** 40 UniSan tasks had no parseable `planned_days` and used the dataset mean (≈8 days) as a proxy. This is a known source of noise, not a silent assumption.
+- **Single snapshot:** Both v1 and v2 are trained on a single project export. With weekly runs, the duration ratio distribution would update incrementally and the results would become more reliable over time.

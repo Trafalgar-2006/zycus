@@ -20,8 +20,8 @@
 | 🟡 Yellow Tasks | 146 |
 | 🟢 Green Tasks | 121 |
 
-| Critical Path (PM-flagged) | 15 tasks | 0 Red | *(source: "Critical ?" column)*
-| Critical Path (graph-computed) | 1 tasks | 262 planned days | *(longest path by duration through predecessor DAG)* (14 tasks PM-flagged but not on longest graph path)
+| Critical Path (PM-flagged) | 15 tasks | 0 Red |
+| Critical Path (graph) | 1 task(s) | *(sparse — only 28% predecessor coverage; graph CP is a partial result on 139 connected tasks, not a complete project CP)* |
 
 
 ---
@@ -35,7 +35,7 @@
 The project is rated **Amber**. There are 60 Red tasks and 146 Yellow/Amber tasks
 across the plan. 262 tasks are completed; 22 are currently in progress.
 
-Monte Carlo simulation (n=10,000) gives **77%** probability of finishing by 2026-12-07. 
+Monte Carlo simulation (n=10,000) gives **78%** probability of finishing by 2026-12-07. 
 **Top drivers (model importance):** total_float_days, variance_sign_code, pct_complete.
 
 
@@ -69,10 +69,10 @@ Status held at **Amber** (score: 0.37 → 0.37, → stable).
 | Metric | Value |
 |--------|-------|
 | Deadline | 2026-12-07 |
-| **P(on time)** | **77%** |
-| P(slip 1 week) | 6% |
+| **P(on time)** | **78%** |
+| P(slip 1 week) | 5% |
 | P(slip 2+ weeks) | 13% |
-| Median finish | 2026-11-13 |
+| Median finish | 2026-11-12 |
 | Duration ratio mean | 0.773 (std: 0.179) |
 | Sample tasks | 113 completed tasks |
 
@@ -125,4 +125,4 @@ Status held at **Amber** (score: 0.37 → 0.37, → stable).
 
 ---
 
-*Report generated: 2026-07-08T15:25:07.712145 | Agent version: 1.0*
+*Report generated: 2026-07-08T00:00:00 | Agent version: 1.0*

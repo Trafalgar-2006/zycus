@@ -51,16 +51,18 @@ def _mc_comparison_section(mc_v1: dict, mc_v2: dict | None) -> str:
     v2_med = mc_v2.get('median_finish_date', 'N/A')
     deadline = mc_v1.get('deadline', mc_v2.get('deadline', 'N/A'))
 
-    # Interpretation note
+    # Interpretation note — compute pp from DISPLAYED rounded values so text matches table
     if mc_v1.get('p_on_time') is not None and mc_v2.get('p_on_time') is not None:
-        diff = mc_v2['p_on_time'] - mc_v1['p_on_time']
-        if abs(diff) < 0.03:
-            interp = "Models agree within 3 pp — dependency constraints add little schedule pressure beyond the throughput baseline."
-        elif diff < 0:
-            interp = (f"Dependency-aware model is {abs(diff)*100:.0f} pp lower than throughput baseline — "
+        v1_disp = round(mc_v1['p_on_time'] * 100)
+        v2_disp = round(mc_v2['p_on_time'] * 100)
+        diff_pp = v2_disp - v1_disp
+        if abs(diff_pp) <= 2:
+            interp = "Models agree within 2 pp — dependency constraints add little schedule pressure beyond the throughput baseline."
+        elif diff_pp < 0:
+            interp = (f"Dependency-aware model is {abs(diff_pp)} pp lower than throughput baseline — "
                       "predecessor constraints introduce sequencing delays not visible in raw completion rate.")
         else:
-            interp = (f"Dependency-aware model is {diff*100:.0f} pp higher than throughput baseline — "
+            interp = (f"Dependency-aware model is {diff_pp} pp higher than throughput baseline — "
                       "parallel predecessor paths absorb some schedule risk visible in throughput extrapolation.")
     else:
         interp = ""
@@ -78,7 +80,11 @@ def _mc_comparison_section(mc_v1: dict, mc_v2: dict | None) -> str:
 
 
 def _cp_comparison_section(scores: dict, dag_info: dict | None) -> str:
-    """PM-flagged vs graph-computed critical path comparison."""
+    """PM-flagged vs graph-computed critical path comparison.
+    
+    For projects with <50% predecessor coverage, the graph CP is a partial
+    result on a sparse graph and should not be presented as if complete.
+    """
     pm_total = scores.get("critical_path", {}).get("total", 0)
     pm_red   = scores.get("critical_path", {}).get("by_rag", {}).get("Red", 0)
 
@@ -88,9 +94,22 @@ def _cp_comparison_section(scores: dict, dag_info: dict | None) -> str:
             f"| Red on Critical Path | {pm_red} |\n"
         )
 
+    cov       = dag_info.get("coverage", {})
+    pct_cov   = cov.get("pct_coverage", 0)
     graph_cp  = dag_info["critical_path"]
     graph_n   = len(graph_cp)
     cp_dur    = dag_info.get("critical_path_duration_days", 0)
+
+    # If coverage too sparse, show PM count + note but don't imply graph CP is authoritative
+    if pct_cov < config.DAG_MIN_COVERAGE:
+        return (
+            f"| Critical Path (PM-flagged) | {pm_total} tasks | {pm_red} Red |\n"
+            f"| Critical Path (graph) | {graph_n} task(s) | "
+            f"*(sparse — only {pct_cov:.0%} predecessor coverage; "
+            f"graph CP is a partial result on {cov.get('n_with_preds', 0)} connected tasks, "
+            f"not a complete project CP)* |\n"
+        )
+
     diff      = graph_n - pm_total
     diff_note = ""
     if diff > 0:

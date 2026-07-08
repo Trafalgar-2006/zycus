@@ -142,7 +142,9 @@ def run_project(
 
 def run_all(project_filter: str | None = None) -> list[Path]:
     """Load all projects, train shared model, run pipeline."""
-    run_date = datetime.now()
+    # Snap to midnight so Monte Carlo results are deterministic within a calendar day
+    # (both simulate() and simulate_v2() use this as 'today' for date arithmetic)
+    run_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
     files = config.PROJECT_FILES
     if project_filter:
