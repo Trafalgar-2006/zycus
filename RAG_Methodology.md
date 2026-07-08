@@ -56,8 +56,10 @@ Measures **how badly completed tasks have drifted** from baseline.
 Historical Slip = min( median(slip_days) / 30 ,  1.0 )
 ```
 
-Where `slip_days = actual_elapsed_working_days − planned_duration` for each
+Where `slip_days = variance_days.abs()` for each
 **late** completed critical task (`variance_sign == "late"`).
+
+*(Note: `actual_elapsed_wd − planned_duration` was considered but is wrong — see design decision below.)*
 
 **Design decisions:**
 - **Median, not mean** — a single 90-day outlier task should not dominate the score.
@@ -144,11 +146,12 @@ schedule data (likely resource readiness, training material quality, or
 stakeholder availability).
 
 Consequence: **the GBT is learning to predict PM judgment, not a deterministic
-formula.** The SHAP/importance findings ("total_float_days and
-variance_sign_code drive RAG") are learning the dominant *pattern* in the PM's
-decisions, not the PM's actual decision rule. This is still informative — it
-tells us what the PM weighs most heavily on average — but should not be
-presented as a mechanistic model.
+formula.** The `feature_importances_` ranking (`total_float_days` and
+`variance_sign_code` dominate) shows the pattern the PM weighs most heavily on
+average — not the PM's actual decision rule.
+*(SHAP TreeExplainer was evaluated but dropped — incompatible with multiclass
+GradientBoosting in scikit-learn without significant overhead and non-determinism;
+`feature_importances_` gives the same directional answer for this use case.)*
 
 **Explicit limitation:** Fit/interpret exercise on 2 projects. No
 project-holdout split possible. The value is transparency: understanding what
