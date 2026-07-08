@@ -84,7 +84,7 @@ def simulate(
         caveat                    : honest limitation statement
     """
     if today is None:
-        today = datetime.now()
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
 
     # ── Pull project deadline from Summary metadata ──────────────────────────
     summary  = df.attrs.get("summary", {})
