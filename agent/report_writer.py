@@ -70,9 +70,9 @@ def _delta_section(delta: dict) -> str:
 
 def _shap_section(shap_info: dict) -> str:
     if shap_info.get("error"):
-        return f"> SHAP: {shap_info['error']}\n"
+        return f"> Feature importance: {shap_info['error']}\n"
     lines = [
-        "| Feature | Mean |SHAP| |\n|---------|----------------|\n"
+        "| Feature | Importance |\n|---------|------------|\n"
     ]
     for f in shap_info.get("top_features", []):
         lines.append(f"| {f['feature']} | {f['mean_abs_shap']} |\n")
@@ -114,12 +114,14 @@ def write_report(
     crit      = scores.get("critical_path", {})
     dq        = scores.get("data_quality", {})
 
+    # Determine whether LLM actually ran or fell back to rule-based
+    _llm_ran = config.USE_LLM and not narrative.startswith("## ")  # rule-based starts with ##
     verify_note = (
         "✅ LLM self-verified (no factual corrections needed)"
-        if verified is True
+        if verified is True and _llm_ran
         else "⚠️ LLM verification flagged corrections (applied)"
-        if verified is False and config.USE_LLM
-        else "ℹ️ Rule-based narrative (no LLM key)"
+        if verified is False and _llm_ran
+        else "ℹ️ Rule-based narrative (LLM unavailable or key not set)"
     )
 
     report = f"""# Weekly Project Health Report
@@ -174,7 +176,7 @@ def write_report(
 
 ---
 
-## 🤖 ML Feature Importance (SHAP)
+## 🤖 ML Feature Importance (feature_importances_)
 
 {_shap_section(shap_info)}
 

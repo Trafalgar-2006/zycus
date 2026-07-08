@@ -246,9 +246,9 @@ Write the narrative now (120-180 words, factual, actionable, VP-ready):"""
         )
         return response.text.strip()
 
-    except Exception as exc:
-        # Never crash the agent due to LLM issues — fall back gracefully
-        fallback = _rule_based_narrative(
+    except Exception:
+        # Never crash the agent due to LLM issues — fall back silently
+        # Do NOT leak the raw exception into the report output
+        return _rule_based_narrative(
             project_name, scores, mc, cluster, delta, shap_info
         )
-        return f"[LLM error: {exc}. Rule-based fallback used.]\n\n{fallback}"

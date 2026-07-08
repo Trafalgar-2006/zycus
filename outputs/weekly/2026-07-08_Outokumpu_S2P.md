@@ -26,55 +26,6 @@
 
 ## 📝 Executive Summary
 
-[LLM error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
-* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash-lite
-* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite
-* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite
-Please retry in 14.522227499s. [links {
-  description: "Learn more about Gemini API quotas"
-  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
-}
-, violations {
-  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
-  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
-  quota_dimensions {
-    key: "model"
-    value: "gemini-2.0-flash-lite"
-  }
-  quota_dimensions {
-    key: "location"
-    value: "global"
-  }
-}
-violations {
-  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
-  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
-  quota_dimensions {
-    key: "model"
-    value: "gemini-2.0-flash-lite"
-  }
-  quota_dimensions {
-    key: "location"
-    value: "global"
-  }
-}
-violations {
-  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
-  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
-  quota_dimensions {
-    key: "model"
-    value: "gemini-2.0-flash-lite"
-  }
-  quota_dimensions {
-    key: "location"
-    value: "global"
-  }
-}
-, retry_delay {
-  seconds: 14
-}
-]. Rule-based fallback used.]
-
 ## Outokumpu S2P — Amber
 
 **Overall score:** 0.37/1.00 | Forward risk: 0.37 | Historical slip: 0.37
@@ -96,56 +47,7 @@ Monte Carlo simulation (n=10,000) gives **77%** probability of finishing by 2026
 > **Positive signal:** Completion rate nearly tripled in the second half of the project (current pace ~9.0 tasks/week). If this acceleration holds, the December deadline is achievable — but verify this reflects real delivery, not task re-baselining.
 
 
-[Verification skipped: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
-* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash-lite
-* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite
-* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite
-Please retry in 14.202686868s. [links {
-  description: "Learn more about Gemini API quotas"
-  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
-}
-, violations {
-  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
-  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
-  quota_dimensions {
-    key: "model"
-    value: "gemini-2.0-flash-lite"
-  }
-  quota_dimensions {
-    key: "location"
-    value: "global"
-  }
-}
-violations {
-  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
-  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
-  quota_dimensions {
-    key: "model"
-    value: "gemini-2.0-flash-lite"
-  }
-  quota_dimensions {
-    key: "location"
-    value: "global"
-  }
-}
-violations {
-  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
-  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
-  quota_dimensions {
-    key: "model"
-    value: "gemini-2.0-flash-lite"
-  }
-  quota_dimensions {
-    key: "location"
-    value: "global"
-  }
-}
-, retry_delay {
-  seconds: 14
-}
-]]
-
-*✅ LLM self-verified (no factual corrections needed)*
+*ℹ️ Rule-based narrative (LLM unavailable or key not set)*
 
 ---
 
@@ -191,10 +93,10 @@ Status held at **Amber** (score: 0.37 → 0.37, → stable).
 
 ---
 
-## 🤖 ML Feature Importance (SHAP)
+## 🤖 ML Feature Importance (feature_importances_)
 
-| Feature | Mean |SHAP| |
-|---------|----------------|
+| Feature | Importance |
+|---------|------------|
 | total_float_days | 0.5439 |
 | variance_sign_code | 0.2716 |
 | pct_complete | 0.1054 |
@@ -219,4 +121,4 @@ Status held at **Amber** (score: 0.37 → 0.37, → stable).
 
 ---
 
-*Report generated: 2026-07-08T14:16:39.774883 | Agent version: 1.0*
+*Report generated: 2026-07-08T14:49:29.564518 | Agent version: 1.0*

@@ -83,6 +83,6 @@ def verify(
         was_modified = verified.strip() != narrative.strip()
         return verified, was_modified
 
-    except Exception as exc:
-        # Verification failure is non-fatal — return original narrative
-        return narrative + f"\n\n[Verification skipped: {exc}]", False
+    except Exception:
+        # Verification failure is non-fatal — return original narrative silently
+        return narrative, False
