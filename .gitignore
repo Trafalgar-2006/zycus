@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment / secrets — NEVER commit API keys
+.env
+.env.*
+*.env
+secrets.py
+api_key.txt
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project outputs (large, regeneratable)
+outputs/project_health.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# PowerPoint temp files
+~$*.pptx
+~$*.xlsx
