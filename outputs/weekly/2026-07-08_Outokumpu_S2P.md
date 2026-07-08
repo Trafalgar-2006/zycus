@@ -38,7 +38,7 @@ Monte Carlo simulation (n=10,000) gives **77%** probability of finishing by 2026
 
 
 
-**Risk concentration:** 48% of active risk tasks cluster around 'N/A' / 'Build', primarily owned by 'N/A'.
+**Risk concentration:** 52% of active risk tasks are primarily owned by 'abhilasha.s@zycus.com' (Area/Phase not populated in source data — clustered on Owner, Task Name).
 
 **Week-on-week:** Status held at **Amber** (score: 0.37 → 0.37, → stable).
 
@@ -81,14 +81,14 @@ Status held at **Amber** (score: 0.37 → 0.37, → stable).
 
 ## 🔍 Risk Concentration (Cluster Analysis)
 
-**48% of active risk tasks cluster around 'N/A' / 'Build', primarily owned by 'N/A'.**
-*Clustered on task Area + Phase + Owner metadata. Comment-based clustering skipped (sparse data: ~10 comments in S2P, 0 in Project B).*
+**52% of active risk tasks are primarily owned by 'abhilasha.s@zycus.com' (Area/Phase not populated in source data — clustered on Owner, Task Name).**
+*Note: Area (0% populated); Phase/Milestone (6% populated) — these fields were excluded from clustering. Clustering based on: Owner, Task Name only. Comment-based clustering skipped (sparse data: ~10 comments in S2P, 0 in UniSan).*
 
 | Cluster | Tasks | % of Risk | Top Area | Top Phase | Top Owner | Red Tasks |
 |---------|-------|-----------|----------|-----------|-----------|----------|
-| 3 | 26 | 48% | N/A | Build | N/A | 1 |
-| 1 | 16 | 30% | N/A | N/A | Titan Project Team | 0 |
-| 2 | 12 | 22% | N/A | N/A | Zycus Product Specialist | 0 |
+| 1 | 28 | 52% | — | Build | abhilasha.s@zycus.com | 1 |
+| 3 | 15 | 28% | — | — | Titan Project Team | 0 |
+| 2 | 11 | 20% | — | — | Zycus Product Specialist | 0 |
 
 
 ---
@@ -121,4 +121,4 @@ Status held at **Amber** (score: 0.37 → 0.37, → stable).
 
 ---
 
-*Report generated: 2026-07-08T14:55:07.674163 | Agent version: 1.0*
+*Report generated: 2026-07-08T14:59:47.527122 | Agent version: 1.0*
