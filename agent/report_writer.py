@@ -11,6 +11,11 @@ from typing import Any
 import config
 
 _RAG_EMOJI = {"Green": "🟢", "Amber": "🟡", "Red": "🔴"}
+_RAG_REASONS = {
+    "Red":   "High forward risk and historical slip — critical-path tasks at elevated risk.",
+    "Amber": "Moderate forward risk — monitor critical-path tasks and slip trend closely.",
+    "Green": "Low forward risk; historical slip within tolerance.",
+}
 
 
 def _rag_badge(rag: str) -> str:
@@ -125,6 +130,153 @@ def _cp_comparison_section(scores: dict, dag_info: dict | None) -> str:
     )
 
 
+def _data_confidence_tag(df, dag_info: dict | None) -> str:
+    """
+    One-line data confidence tier based on key field null rates + predecessor coverage.
+    High: weighted badness <20%; Medium: 20–45%; Low: >45%.
+    """
+    plan_null = float(df["planned_days"].isna().mean()) if "planned_days" in df.columns else 1.0
+    pct_null  = float(df["pct_complete"].isna().mean())  if "pct_complete"  in df.columns else 1.0
+    pred_gap  = 1.0 - (dag_info or {}).get("coverage", {}).get("pct_coverage", 1.0)
+    # pred_gap weighted higher: it controls whether DAG-MC is trustworthy
+    bad = 0.4 * pred_gap + 0.3 * plan_null + 0.3 * pct_null
+
+    tier, emoji = ("High", "🟢") if bad < 0.20 else (("Medium", "🟡") if bad < 0.45 else ("Low", "🔴"))
+    pred_pct    = (1.0 - pred_gap) * 100
+    return (
+        f"**Data Confidence: {emoji} {tier}** — "
+        f"predecessor coverage: {pred_pct:.0f}%; "
+        f"planned\_days missing: {plan_null*100:.0f}%; "
+        f"pct\_complete missing: {pct_null*100:.0f}%"
+    )
+
+
+def _naive_baseline_section(df, mc: dict, mc_v2: dict | None, scores: dict) -> str:
+    """
+    Side-by-side: naive %-complete vs this agent's assessment.
+    Answers: 'Why does this tool add value beyond a tracking spreadsheet?'
+    """
+    active    = df[~df["Status"].isin(["Completed", "Not Applicable"])]
+    naive_pct = active["pct_complete"].fillna(0).mean() if len(active) > 0 else 0.0
+
+    summary = df.attrs.get("summary", {})
+    start   = summary.get("Project Start Date")
+    end     = summary.get("Project End Date")
+    today   = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    time_pct_str  = "N/A"
+    naive_verdict = "Cannot assess (missing project dates)"
+    if isinstance(start, datetime) and isinstance(end, datetime):
+        elapsed    = max((today - start).days, 0)
+        total_days = max((end - start).days, 1)
+        time_pct   = min(elapsed / total_days * 100, 100)
+        time_pct_str = f"{time_pct:.0f}%"
+        gap = naive_pct * 100 - time_pct
+        naive_verdict = (
+            f"On track ({naive_pct*100:.0f}% done; {time_pct:.0f}% of schedule elapsed)"
+            if gap >= -5 else
+            f"Behind — {naive_pct*100:.0f}% done, {time_pct:.0f}% of time elapsed ({abs(gap):.0f}pp gap)"
+        )
+
+    p_on = mc.get("p_on_time")
+    p_v2 = (mc_v2 or {}).get("p_on_time")
+    p_str = f"{round(p_on*100)}%" if p_on is not None else "N/A"
+    v2_note = f" → {round(p_v2*100)}% after dependency-graph correction (DAG v2)" if p_v2 is not None else ""
+    red_cp    = scores.get("critical_path", {}).get("by_rag", {}).get("Red", 0)
+    cp_total  = scores.get("critical_path", {}).get("total", 0)
+
+    return (
+        f"| View | Signal | Verdict |\n"
+        f"|------|--------|---------|​\n"
+        f"| **Naïve (% complete vs time)** "
+        f"| {naive_pct*100:.0f}% tasks done; {time_pct_str} of schedule elapsed "
+        f"| {naive_verdict} |\n"
+        f"| **This agent — RAG + ML** "
+        f"| Score {scores['project_score']:.3f}; {red_cp}/{cp_total} critical-path tasks Red "
+        f"| **{scores.get('rag', 'N/A')}** |\n"
+        f"| **This agent — Monte Carlo** "
+        f"| 10,000 simulations, historical duration ratios from completed tasks "
+        f"| P(on-time) = {p_str}{v2_note} |\n\n"
+        f"> *The naïve view ignores velocity trends, critical-path composition, and duration variance. "
+        f"The agent's MC uses historical slip rates from completed tasks"
+        + (" and propagates them through the predecessor DAG" if p_v2 is not None else "")
+        + " — producing a calibrated probability rather than a binary on/off.*\n"
+    )
+
+
+def write_exec_summary(
+    project_name: str,
+    df,
+    scores: dict[str, Any],
+    mc: dict[str, Any],
+    mc_v2: dict[str, Any] | None,
+    cluster: dict[str, Any],
+    dag_info: dict[str, Any] | None,
+    narrative: str,
+    run_date: datetime,
+    output_dir: str = "outputs/exec",
+) -> Path:
+    """One-page executive summary: RAG badge, reason, P(on-time), one action item."""
+    rag       = scores["rag"]
+    emoji     = _RAG_EMOJI.get(rag, "⚪")
+    score     = scores["project_score"]
+    fwd       = scores.get("forward_risk", 0)
+    slip      = scores.get("historical_slip", 0)
+    red_cp    = scores.get("critical_path", {}).get("by_rag", {}).get("Red", 0)
+    cp_total  = scores.get("critical_path", {}).get("total", 0)
+
+    reason = (
+        f"High forward risk ({fwd:.0%}) with {red_cp}/{cp_total} Red tasks on the critical path; "
+        f"historical slip {slip:.0%}." if rag == "Red" else
+        f"Moderate forward risk ({fwd:.0%}); {red_cp} Red critical-path task(s); slip {slip:.0%}." if rag == "Amber" else
+        f"Low forward risk ({fwd:.0%}); historical slip within tolerance ({slip:.0%})."
+    )
+
+    p_on_v1 = mc.get("p_on_time")
+    p_on_v2 = (mc_v2 or {}).get("p_on_time")
+    if p_on_v2 is not None:
+        p_str = (
+            f"{round(p_on_v2*100)}% (DAG-aware) — vs {round(p_on_v1*100)}% throughput baseline; "
+            f"{round(p_on_v2*100) - round(p_on_v1*100):+d} pp from dependency structure"
+        )
+    elif p_on_v1 is not None:
+        p_str = f"{round(p_on_v1*100)}% (throughput model; DAG skipped — low predecessor coverage)"
+    else:
+        p_str = "N/A"
+    deadline = mc.get("deadline", (mc_v2 or {}).get("deadline", "Unknown"))
+
+    n_at_risk   = cluster.get("n_at_risk_active", 0)
+    clusters    = cluster.get("clusters", [])
+    top_cluster = clusters[0] if clusters else {}
+    top_owner   = top_cluster.get("top_owner", "")
+    top_n       = top_cluster.get("task_count", 0)
+    action = (
+        f"Review and triage the {n_at_risk} active at-risk tasks"
+        + (f" — {top_n} concentrated under {top_owner}" if top_owner else "")
+        + "."
+    )
+
+    conf_line = _data_confidence_tag(df, dag_info)
+
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = project_name.replace(" ", "_").replace("/", "-")
+    fname = out_dir / f"{run_date.strftime('%Y-%m-%d')}_{safe_name}_exec.md"
+    fname.write_text(
+        f"# {emoji} {project_name} — Executive Summary\n\n"
+        f"**Date:** {run_date.strftime('%d %b %Y')}  |  "
+        f"**Status:** {emoji} **{rag}** (score: {score:.3f}/1.00)\n\n"
+        f"**Why:** {reason}\n\n"
+        f"**P(on-time):** {p_str}\n\n"
+        f"**Deadline:** {deadline}\n\n"
+        f"**Primary action:** {action}\n\n"
+        f"---\n\n"
+        f"> {conf_line}\n",
+        encoding="utf-8",
+    )
+    return fname
+
+
 def _cluster_section(cluster: dict) -> str:
     if not cluster.get("clusters"):
         return f"> {cluster.get('headline', 'No cluster data.')}\n"
@@ -184,6 +336,7 @@ def write_report(
     verified: bool,
     run_date: datetime | None = None,
     output_dir: str = config.WEEKLY_OUTPUT_DIR,
+    df=None,                   # DataFrame for confidence tag + naive baseline
 ) -> Path:
     """
     Compose and write the full weekly Markdown report.
@@ -205,6 +358,7 @@ def write_report(
     by_status = summary.get("by_status", {})
     by_rag    = summary.get("by_rag", {})
     dq        = scores.get("data_quality", {})
+    conf_line = _data_confidence_tag(df, dag_info) if df is not None else ""
 
     # Determine whether LLM actually ran or fell back to rule-based
     _llm_ran = config.USE_LLM and not narrative.startswith("## ")  # rule-based starts with ##
@@ -220,6 +374,7 @@ def write_report(
 **Project:** {project_name}
 **Report Date:** {date_str}
 **Generated by:** Zycus Project Health Agent
+{("> " + conf_line) if conf_line else ""}
 
 ---
 
@@ -259,6 +414,12 @@ def write_report(
 ## 🎲 Monte Carlo Deadline Forecast
 
 {_mc_comparison_section(mc, mc_v2)}
+
+---
+
+## 📊 Naïve vs Model Baseline
+
+{_naive_baseline_section(df, mc, mc_v2, scores) if df is not None else '> df not passed; baseline unavailable.'}
 
 ---
 

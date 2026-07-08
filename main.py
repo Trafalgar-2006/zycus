@@ -31,7 +31,7 @@ from agent.delta_store    import save_run, build_delta
 from agent.dag_builder    import build_dag
 from agent.reasoner       import generate_narrative
 from agent.verifier       import verify
-from agent.report_writer  import write_report
+from agent.report_writer  import write_report, write_exec_summary
 
 
 def run_project(
@@ -40,8 +40,16 @@ def run_project(
     model,
     importance: dict,
     run_date: datetime,
-) -> Path:
-    """Run the full pipeline for a single project and return report path."""
+) -> tuple[Path, dict]:
+    """Run the full pipeline for a single project.
+
+    Returns
+    -------
+    (report_path, pipeline_dict)
+        pipeline_dict contains all outputs keyed by type so that
+        run_all() can pass them to the PPTX generator and exec summary
+        without re-running anything.
+    """
     print(f"\n{'='*60}")
     print(f"  Processing: {name}")
     print(f"{'='*60}")
@@ -134,10 +142,22 @@ def run_project(
         narrative=narrative,
         verified=not was_modified,
         run_date=run_date,
+        df=df,
     )
     print(f"        -> {report_path}")
 
-    return report_path
+    pipeline = {
+        "scores":   scores,
+        "mc":       mc,
+        "mc_v2":    mc_v2,
+        "dag_info": dag_info,
+        "cluster":  cluster,
+        "shap_info": shap_inf,
+        "delta":    delta,
+        "narrative": narrative,
+        "df":       df,
+    }
+    return report_path, pipeline
 
 
 def run_all(project_filter: str | None = None) -> list[Path]:
@@ -163,10 +183,35 @@ def run_all(project_filter: str | None = None) -> list[Path]:
     top_feats = sorted(importance.items(), key=lambda x: x[1], reverse=True)[:3]
     print(f"   Top features: {', '.join(f'{k}({v:.3f})' for k,v in top_feats)}")
 
-    reports = []
+    reports   = []
+    live_data = {}                          # {project_name: pipeline_dict}
     for name, df in all_dfs_dict.items():
-        path = run_project(name, df, model, importance, run_date)
+        path, pipeline = run_project(name, df, model, importance, run_date)
         reports.append(path)
+        live_data[name] = pipeline
+
+    # Executive summaries (one-pager per project)
+    print("\nGenerating executive summaries...")
+    from agent.report_writer import write_exec_summary as _wes
+    for name, pipeline in live_data.items():
+        ep = _wes(
+            project_name=name,
+            df=pipeline["df"],
+            scores=pipeline["scores"],
+            mc=pipeline["mc"],
+            mc_v2=pipeline["mc_v2"],
+            cluster=pipeline["cluster"],
+            dag_info=pipeline["dag_info"],
+            narrative=pipeline["narrative"],
+            run_date=run_date,
+        )
+        print(f"   -> {ep}")
+
+    # Monthly PPTX (always regenerated with live data after a full run)
+    print("\nGenerating monthly PPTX...")
+    from pptx_generator import generate_monthly_pptx
+    pptx_path = generate_monthly_pptx(live_data=live_data)
+    print(f"   -> {pptx_path}")
 
     print(f"\nDone. {len(reports)} report(s) written.")
     return reports
