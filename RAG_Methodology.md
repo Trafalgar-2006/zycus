@@ -79,7 +79,7 @@ Where `slip_days = variance_days.abs()` for each
 - **Same fallback guard** as Forward Risk: if fewer than 5 critical completed
   tasks exist, uses all completed tasks.
 
-**Known limitation — Duration cascade (verified 2026-07-08):**
+**Known limitation — Duration cascade (verified 2026-07-10):**
 The Duration column is also affected by the PM tool's dependency-cascade
 machinery for parent/summary rows. Empirically checked by comparing each
 parent task's stated Duration to the sum and max of its immediate children
@@ -124,7 +124,7 @@ is used as a reliable signal. See Assumption 3.
 A `GradientBoostingClassifier` is trained on ~878 task rows across both
 projects to predict the existing RAG/Schedule Health label.
 
-**Verified importance ranking (current feature set, 2026-07-08):**
+**Verified importance ranking (current feature set, 2026-07-10):**
 
 | Feature | Importance | Interpretation |
 |---------|-----------|----------------|
@@ -137,7 +137,7 @@ projects to predict the existing RAG/Schedule Health label.
 
 **Critical disclosure — RAG is manually set by PMs, not computed from Variance:**
 
-Spot-checking UniSan's Schedule Health column (Check 4, verified 2026-07-08)
+Spot-checking UniSan's Schedule Health column (Check 4, verified 2026-07-10)
 revealed three Training Phase tasks (`Training Phase I`, `Train The Trainer`,
 `Admin Training`) with `variance_sign = early` (+17 days ahead of schedule)
 but labeled **Red** in Schedule Health. A formulaic rule would mark these
@@ -206,14 +206,14 @@ signals correlate with the PM's health judgments in this dataset.
 
 ### Why we built a second model
 
-The throughput-based simulation (v1) produced a **5% P(on-time)** for UniSan and **78%** for Outokumpu *(as of 2026-07-08; numbers update each run as the project progresses)*. The UniSan number felt structurally pessimistic: the throughput model extrapolates a single team-wide completion rate forward, as if every remaining task must be done serially. Real projects don't work that way — workstreams run in parallel, and predecessor constraints tell you *which* tasks are actually blocking others.
+The throughput-based simulation (v1) produced a **5% P(on-time)** for UniSan and **78%** for Outokumpu *(as of 2026-07-10; numbers update each run as the project progresses)*. The UniSan number felt structurally pessimistic: the throughput model extrapolates a single team-wide completion rate forward, as if every remaining task must be done serially. Real projects don't work that way — workstreams run in parallel, and predecessor constraints tell you *which* tasks are actually blocking others.
 
 To test whether the model was being too conservative, we built the task dependency graph from the MS Project `Predecessors` column and implemented a discrete-event simulation that propagates finish times through the DAG topologically: a task can only start once all its predecessors have finished (plus any lag). This is qualitatively different from a throughput extrapolation — it respects the actual scheduling structure instead of assuming serial execution.
 
 ### What changed and why
 
 For **UniSan** (74% predecessor coverage — 283 of 383 tasks have documented predecessors):
-- **v1: 5%** | **v2: 15%** — a 10 pp improvement *(as of 2026-07-08)*
+- **v1: 5%** | **v2: 15%** — a 10 pp improvement *(as of 2026-07-10)*
 - The difference reflects real parallel structure in the schedule. When predecessor constraints are enforced, many tasks that the throughput model counts as a serial backlog turn out to run concurrently with each other. The project is still highly likely to slip (85% probability), but the *mechanism* is now grounded in the actual task graph rather than a flat completion-rate extrapolation.
 - The 50-task graph-computed critical path agrees exactly with the PM-flagged 50 critical-path tasks — which is a useful cross-validation: it means the PM was tracking the longest-duration chain, not just applying the flag arbitrarily.
 
