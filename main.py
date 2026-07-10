@@ -22,6 +22,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Force UTF-8 output to prevent UnicodeEncodeError on Windows consoles
+if sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except AttributeError:
+        pass
+
 import config
 from agent.data_loader    import load_all_projects, load_project
 from agent.rag_scorer     import train_model, score_project, shap_summary
