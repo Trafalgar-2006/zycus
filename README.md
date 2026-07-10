@@ -65,7 +65,7 @@ outputs/
 │   ├── reasoner.py          # LLM narrative (Gemini 2.0 / rule-based fallback)
 │   ├── verifier.py          # LLM self-verification loop
 │   └── report_writer.py     # Markdown report + exec summary composer
-├── diagnostics/             # One-off audit/debug scripts (not production)
+├── validation/              # One-off audit/debug scripts (not production)
 ├── main.py                  # CLI entry point — orchestrates full pipeline
 ├── scheduler.py             # Weekly cron runner
 ├── pptx_generator.py        # Executive PPTX builder (consumes live pipeline data)

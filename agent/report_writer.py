@@ -146,8 +146,8 @@ def _data_confidence_tag(df, dag_info: dict | None) -> str:
     return (
         f"**Data Confidence: {emoji} {tier}** — "
         f"predecessor coverage: {pred_pct:.0f}%; "
-        f"planned\_days missing: {plan_null*100:.0f}%; "
-        f"pct\_complete missing: {pct_null*100:.0f}%"
+        f"planned_days missing: {plan_null*100:.0f}%; "
+        f"pct_complete missing: {pct_null*100:.0f}%"
     )
 
 
