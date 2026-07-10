@@ -12,4 +12,4 @@
 
 ---
 
-> **Data Confidence: 🟢 High** — predecessor coverage: 74%; planned\_days missing: 0%; pct\_complete missing: 0%
+> **Data Confidence: 🟢 High** — predecessor coverage: 74%; planned_days missing: 0%; pct_complete missing: 0%
